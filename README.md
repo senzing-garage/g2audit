@@ -87,6 +87,6 @@ were corrected without drastically affecting the overall precision and recall sc
 * NEWER_SCORE indicates the reported score for this record in relation to the newer entity reported by the candidate or newer result set.
 
 *The scores are usually only provided on data run through the Senzing software which even provides scores of records that were not matched.
-For instance in screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and 
+For instance in the screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and 
 date of birth.*
 
