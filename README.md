@@ -73,5 +73,20 @@ were corrected without drastically affecting the overall precision and recall sc
 
 ![Alt text](images/json-file-screenshot.jpg?raw=true "Screen shot")
 
+#### csv statistics file
 
+![Alt text](images/csv-file-screenshot.jpg?raw=true "Screen shot")
+
+* AUDIT_ID groups the records involved in a split or merged entity.
+* AUDIT_CATEGORY is either "SPLIT" or "MERGED" or "SPLIT+MERGED" and applies to the group so is the same for every record in the AUDIT_ID.
+* AUDIT_RESULT is either "new_positive", "new_negative", or "same" and shows that particular record's role in the audit result.
+* DATA_SOURCE and RECORD_ID indicate the specific record.
+* PRIOR_ID indicates the unique entity or cluster ID in the prior or truth set.
+* PRIOR_SCORE indicates the reported score for this record in relation to the prior entity reported by the prior or truth set.
+* NEWER_ID indicates the unique entity or cluster ID in the prior or truth set.
+* NEWER_SCORE indicates the reported score for this record in relation to the newer entity reported by the candidate or newer result set.
+
+*The scores are usually only provided on data run through the Senzing software which even provides scores of records that were not matched.
+For instance in screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and 
+date of birth.*
 
