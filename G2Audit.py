@@ -3,14 +3,10 @@
 import os
 import sys
 import argparse
-try:
-    import configparser
-except:
-    import ConfigParser as configparser
 import signal
 import csv
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import random
 
@@ -32,17 +28,16 @@ def signal_handler(signal, frame):
     print('USER INTERUPT! Shutting down ... (please wait)')
     global shutDown
     shutDown = True
-    return
 
 
 # ----------------------------------------
 def splitCost(a, b):
-    return (a * b)
+    return a * b
 
 
 # ----------------------------------------
 def mergeCost(a, b):
-    return (a * b)
+    return a * b
 
 
 # ----------------------------------------
@@ -100,22 +95,21 @@ def makeKeytable(fileName, tableName):
             print(json.dumps(fileMap, indent=4))
             print('')
             return None
-        else:
-            try:
-                fileMap = json.load(open(fileName + '.map'))
-            except ValueError as err:
-                print('error opening %s' % (fileName + '.map'))
-                print(err)
-                return None
-            if 'clusterField' not in fileMap:
-                print('clusterField missing from file map')
-                return None
-            if 'recordField' not in fileMap:
-                print('recordField missing from file map')
-                return None
-            if 'sourceField' not in fileMap and 'sourceValue' not in fileMap:
-                print('either a sourceField or sourceValue must be specified in the file map')
-                return None
+        try:
+            fileMap = json.load(open(fileName + '.map'))
+        except ValueError as err:
+            print('error opening %s' % (fileName + '.map'))
+            print(err)
+            return None
+        if 'clusterField' not in fileMap:
+            print('clusterField missing from file map')
+            return None
+        if 'recordField' not in fileMap:
+            print('recordField missing from file map')
+            return None
+        if 'sourceField' not in fileMap and 'sourceValue' not in fileMap:
+            print('either a sourceField or sourceValue must be specified in the file map')
+            return None
 
     fileMap['fileName'] = fileName
     fileMap['tableName'] = tableName
@@ -207,7 +201,7 @@ def erCompare(fileName1, fileName2, outputRoot):
     except IOError as err:
         print(err)
         print('could not write to output file %s' % outputCsvFile)
-        return
+        return 1
     nextAuditID = 0
 
     # --initialize stats
@@ -241,11 +235,7 @@ def erCompare(fileName1, fileName2, outputRoot):
     statpack['AUDIT'] = {}
     statpack['MISSING_RECORD_COUNT'] = 0
 
-    # --to track the largest matching clusters with new positives
-    newPositiveClusters = {}
-
     # --go through each cluster in the second file
-    # print('processing %s ...' % fileMap2['fileName'])
     batchStartTime = time.time()
     entityCnt = 0
     for side2clusterID in fileMap2['clusters']:
@@ -254,7 +244,6 @@ def erCompare(fileName1, fileName2, outputRoot):
         entityCnt += 1
         if entityCnt % 10000 == 0:
             now = datetime.now().strftime('%I:%M%p').lower()
-            elapsedMins = round((time.time() - batchStartTime) / 60, 1)
             eps = int(float(sqlCommitSize) / (float(time.time() - batchStartTime if time.time() - batchStartTime != 0 else 1)))
             batchStartTime = time.time()
             print(' %s entities processed at %s, %s per second' % (entityCnt, now, eps))
@@ -396,7 +385,7 @@ def erCompare(fileName1, fileName2, outputRoot):
                 if side2clusterCounts[clusterID] > side2clusterCounts[side2clusterID]:
                     largerClusterID = clusterID
                     break
-                elif side2clusterCounts[clusterID] == side2clusterCounts[side2clusterID] and clusterID < side2clusterID:
+                if side2clusterCounts[clusterID] == side2clusterCounts[side2clusterID] and clusterID < side2clusterID:
                     lowerClusterID = clusterID
 
             if debugOn:
@@ -411,9 +400,8 @@ def erCompare(fileName1, fileName2, outputRoot):
                 print('AUDIT RESULT BYPASSED!')
                 pause()
             continue
-        else:
-            if debugOn:
-                print('AUDIT RESULT WILL BE COUNTED!')
+        if debugOn:
+            print('AUDIT RESULT WILL BE COUNTED!')
 
         # --compute the slice algorithm's cost
         if newNegativeCnt > 0:
@@ -468,7 +456,6 @@ def erCompare(fileName1, fileName2, outputRoot):
         statpack['AUDIT'][auditCategory]['COUNT'] += 1
         nextAuditID += 1
         sampleRows = []
-        score1List = {}  # --will be matchKey for senzing
         for auditData in auditRows:
             csvRow = []
             csvRow.append(nextAuditID)
@@ -503,25 +490,25 @@ def erCompare(fileName1, fileName2, outputRoot):
             except IOError as err:
                 print(err)
                 print('could not write to output file %s' % outputCsvFile)
-                return
+                return 1
             # print(','.join(map(str, csvRow)))
 
         # --assign the best score (most used)
-        if True:
-            if len(scoreCounts) == 0:
-                bestScore = 'none'
-            elif len(scoreCounts) == 1:
-                bestScore = list(scoreCounts.keys())[0]
-            else:
-                bestScore = 'multiple'
-        # --assign the best score (most used)
-        else:
+        use_best = False
+        if use_best:
             bestScore = 'none'
             bestCount = 0
             for score in scoreCounts:
                 if scoreCounts[score] > bestCount:
                     bestScore = score
                     bestCount = scoreCounts[score]
+        else: # just say multiple if more than one
+            if len(scoreCounts) == 0:
+                bestScore = 'none'
+            elif len(scoreCounts) == 1:
+                bestScore = list(scoreCounts.keys())[0]
+            else:
+                bestScore = 'multiple'
 
         # --initialize sub category
         if bestScore not in statpack['AUDIT'][auditCategory]['SUB_CATEGORY']:
@@ -545,7 +532,6 @@ def erCompare(fileName1, fileName2, outputRoot):
 
     # --completion display
     now = datetime.now().strftime('%I:%M%p').lower()
-    elapsedMins = round((time.time() - procStartTime) / 60, 1)
     eps = int(float(sqlCommitSize) / (float(time.time() - batchStartTime if time.time() - batchStartTime != 0 else 1)))
     batchStartTime = time.time()
     print(' %s entities processed at %s, %s per second, complete!' % (entityCnt, now, eps))
@@ -592,7 +578,7 @@ def erCompare(fileName1, fileName2, outputRoot):
     statpack['PAIRS']['PRECISION'] = 0
     statpack['PAIRS']['RECALL'] = 0
     statpack['PAIRS']['F1-SCORE'] = 0
-    if statpack['PAIRS']['NEWER_COUNT'] and statpack['PAIRS']['PRIOR_COUNT']:
+    if statpack['PAIRS']['SAME_POSITIVE']:
         statpack['PAIRS']['PRECISION'] = round(statpack['PAIRS']['SAME_POSITIVE'] / (statpack['PAIRS']['SAME_POSITIVE'] + statpack['PAIRS']['NEW_POSITIVE'] + .0), 5)
         statpack['PAIRS']['RECALL'] = round(statpack['PAIRS']['SAME_POSITIVE'] / (statpack['PAIRS']['SAME_POSITIVE'] + statpack['PAIRS']['NEW_NEGATIVE'] + .0), 5)
         if (statpack['PAIRS']['PRECISION'] + statpack['PAIRS']['RECALL']) != 0:
@@ -602,7 +588,7 @@ def erCompare(fileName1, fileName2, outputRoot):
     statpack['RECORDS']['PRECISION'] = 0
     statpack['RECORDS']['RECALL'] = 0
     statpack['RECORDS']['F1-SCORE'] = 0
-    if statpack['RECORDS']['PRIOR_POSITIVE']:
+    if statpack['RECORDS']['SAME_POSITIVE']:
         statpack['RECORDS']['PRECISION'] = round(statpack['RECORDS']['SAME_POSITIVE'] / (statpack['RECORDS']['SAME_POSITIVE'] + statpack['RECORDS']['NEW_POSITIVE'] + .0), 5)
         statpack['RECORDS']['RECALL'] = round(statpack['RECORDS']['SAME_POSITIVE'] / (statpack['RECORDS']['SAME_POSITIVE'] + statpack['RECORDS']['NEW_NEGATIVE'] + .0), 5)
         if (statpack['RECORDS']['PRECISION'] + statpack['RECORDS']['RECALL']) != 0:
@@ -651,12 +637,11 @@ def erCompare(fileName1, fileName2, outputRoot):
     else:
         print('process completed successfully!')
     print('')
-    return
+    return 0
 
 
 # ===== The main function =====
 if __name__ == '__main__':
-    global shutDown
     shutDown = False
     signal.signal(signal.SIGINT, signal_handler)
     procStartTime = time.time()
@@ -675,20 +660,39 @@ if __name__ == '__main__':
     outputRoot = args.outputRoot
     debugOn = args.debug
 
-    # --validations
+    print()
+    err_cnt = 0
     if not newerFile:
-        print('ERROR: A newer entity map file must be specified with -n')
-        sys.exit(1)
+        print('ERROR: A newer csv file must be specified with -n')
+        err_cnt += 1
+    elif not os.path.exists(newerFile):
+        print('ERROR: The newer csv file was not found!')
+        err_cnt += 1
+
     if not priorFile:
-        print('ERROR: A prior entity map file must be specified with -p')
-        sys.exit(1)
+        print('ERROR: A prior csv file must be specified with -p')
+        err_cnt += 1
+    elif not os.path.exists(priorFile):
+        print('ERROR: The prior csv file was not found!')
+        err_cnt += 1
+
     if not outputRoot:
         print('ERROR: An output root must be specified with -o')
-        sys.exit(1)
-    if os.path.splitext(outputRoot)[1]:
+        err_cnt += 1
+    elif os.path.splitext(outputRoot)[1]:
         print("Please don't use a file extension as both a .json and a .csv file will be created")
-        sys.exit(1)
+        err_cnt += 1
 
-    erCompare(newerFile, priorFile, outputRoot)
+    try:
+        csvHandle = open(outputRoot + '.json', 'w')
+    except IOError as err:
+        print(f"ERROR: Opening output file: {err}")
+        err_cnt += 1
 
-    sys.exit(0)
+    if err_cnt:
+        print()
+    else:
+        err_cnt = erCompare(newerFile, priorFile, outputRoot)
+
+
+    sys.exit(err_cnt)
