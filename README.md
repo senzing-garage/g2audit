@@ -2,8 +2,8 @@
 
 ## Overview
 
-The [G2Audit.py](G2Audit.py) utility compares two entity resolution result sets and computes the precision, recall and F1 scores between them. It 
-can be used to compare different runs to a truth set to determine which one is best or to determine the full effect a configuration change had 
+The [G2Audit.py](G2Audit.py) utility compares two entity resolution result sets and computes the precision, recall and F1 scores between them. It
+can be used to compare different runs to a truth set to determine which one is best or to determine the full effect a configuration change had
 gainst prior run of the same data.  There are many articles that describe this including:
 - https://senzing.zendesk.com/hc/en-us/articles/360045624093-Understanding-the-G2Audit-statistics
 - https://senzing.zendesk.com/hc/en-us/articles/360050643034-Exploratory-Data-Analysis-4-Comparing-ER-results
@@ -33,21 +33,21 @@ optional arguments:
 
 ## Contents
 
-1. [Prerequisites](#Prerequisites)
-2. [Installation](#Installation)
-3. [Typical use](#Typical-use)
-4. [Output files](#Output-files)
+1. [Prerequisites](#prerequisites)
+2. [Installation](#installation)
+3. [Typical use](#typical-use)
+4. [Output files](#output-files)
 
 ### Prerequisites
 - Python 3.6 or higher
 
-*Plenty of RAM! This process runs very fast as it loads each data set into memory. This is not a problem if your control or truth set is under a million records.  But if you get into the 
+*Plenty of RAM! This process runs very fast as it loads each data set into memory. This is not a problem if your control or truth set is under a million records.  But if you get into the
 10s or 100s of million records, you will need to run this on a computer with enough RAM to load both sets into memory at the same time.*
 
 ### Installation
 
 1. Place the the following file in a directory of your choice:
-    - [G2Audit.py](G2Audit.py) 
+    - [G2Audit.py](G2Audit.py)
 
 ### Typical use
 
@@ -63,7 +63,7 @@ You will find the precision, recall and F1 scores in the audit1-result1.json and
 ```console
 python3 G2Audit.py -n /path/to/v1-config-test1-result.csv -p /path/to/v2-config-test1-result.csv -o /path/to/audit-result-cfg2-cfg1
 ```
-This would determine the effect the version 2 config changes had on the test1 data set compared to the version 1 config result on the same data.  
+This would determine the effect the version 2 config changes had on the test1 data set compared to the version 1 config result on the same data.
 
 Configuration updates are usually made to reduce false positives or negatives on specific examples reported by users.  Performing this kind of an audit can help ensure their examples
 were corrected without drastically affecting the overall precision and recall scores.
@@ -88,7 +88,7 @@ were corrected without drastically affecting the overall precision and recall sc
 * NEWER_SCORE indicates the reported score for this record in relation to the newer entity reported by the newer or candidate result set.
 
 *The scores are usually only provided on data run through the Senzing software which even provides scores of records that were not matched.
-For instance in the screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and 
+For instance in the screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and
 date of birth.*
 
 
