@@ -90,6 +90,3 @@ were corrected without drastically affecting the overall precision and recall sc
 *The scores are usually only provided on data run through the Senzing software which even provides scores of records that were not matched.
 For instance in the screen shot above, line 8 shows that even though the entity was split, there was still a relationship created on name and
 date of birth.*
-
-
-
