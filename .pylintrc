@@ -23,6 +23,7 @@ disable=
     undefined-variable,
     unspecified-encoding,
     unused-argument,
+    used-before-assignment,
     wrong-import-order,
 good-names=
     template-python
