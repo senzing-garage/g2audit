@@ -10,8 +10,8 @@ gainst prior run of the same data.  There are many articles that describe this i
 - https://senzing.zendesk.com/hc/en-us/articles/360051016033-How-to-create-an-entity-resolution-truth-set
 
 This project is designed to be used along with:
-* https://github.com/Senzing/g2snapshot to extract the entity resolution result set from a Senzing database
-* https://github.com/Senzing/g2explorer to explore the audit result statistics and examples (requires the data to be loaded into Senzing)
+* https://github.com/senzing-garage/g2snapshot to extract the entity resolution result set from a Senzing database
+* https://github.com/senzing-garage/g2explorer to explore the audit result statistics and examples (requires the data to be loaded into Senzing)
 
 Usage:
 
