@@ -31,20 +31,8 @@ def signal_handler(signal, frame):
 
 
 # ----------------------------------------
-def splitCost(a, b):
-    return a * b
-
-
-# ----------------------------------------
-def mergeCost(a, b):
-    return a * b
-
-
-# ----------------------------------------
 def makeKeytable(fileName, tableName):
-
-    print('loading %s ...' % fileName)
-
+    print(f'loading {fileName} ...')
     try:
         with open(fileName, 'r') as f:
             headerLine = f.readline()
@@ -120,9 +108,6 @@ def makeKeytable(fileName, tableName):
     if fileMap['recordField'] not in fileMap['columnHeaders']:
         print('column %s not in %s' % (fileMap['recordField'], fileMap['fileName']))
         return 1
-    # if  fileMap['sourceField'] not in fileMap['columnHeaders']:
-    #    print('column %s not in %s' % (fileMap['sourceField'], fileMap['fileName']))
-    #    return 1
 
     fileMap['clusters'] = {}
     fileMap['records'] = {}
@@ -167,13 +152,13 @@ def makeKeytable(fileName, tableName):
 def erCompare(fileName1, fileName2, outputRoot):
 
     # --load the second file into a database table (this is the prior run or prior ground truth)
-    fileMap2 = makeKeytable(fileName2, 'prior')
-    if not fileMap2:
+    priorMap = makeKeytable(fileName2, 'prior')
+    if not priorMap:
         return 1
 
     # --load the first file into a database table (this is the newer run or candidate for adoption)
-    fileMap1 = makeKeytable(fileName1, 'newer')
-    if not fileMap1:
+    newerMap = makeKeytable(fileName1, 'newer')
+    if not newerMap:
         return 1
 
     # --set output files and columns
@@ -229,16 +214,13 @@ def erCompare(fileName1, fileName2, outputRoot):
     statpack['PAIRS']['PRIOR_COUNT'] = 0
     statpack['PAIRS']['COMMON_COUNT'] = 0
 
-    statpack['SLICE'] = {}
-    statpack['SLICE']['COST'] = 0
-
     statpack['AUDIT'] = {}
     statpack['MISSING_RECORD_COUNT'] = 0
 
     # --go through each cluster in the second file
     batchStartTime = time.time()
     entityCnt = 0
-    for side2clusterID in fileMap2['clusters']:
+    for priorClusterID in priorMap['clusters']:
 
         # --progress display
         entityCnt += 1
@@ -250,121 +232,121 @@ def erCompare(fileName1, fileName2, outputRoot):
 
         # --store the side2 cluster
         statpack['ENTITY']['PRIOR_COUNT'] += 1
-        side2recordIDs = fileMap2['clusters'][side2clusterID]
-        side2recordCnt = len(side2recordIDs)
+        priorRecordIDs = priorMap['clusters'][priorClusterID]
+        priorRecordCnt = len(priorRecordIDs)
         if debugOn:
             print('-' * 50)
-            print('prior cluster [%s] has %s records (%s)' % (side2clusterID, side2recordCnt, ','.join(sorted(side2recordIDs)[:10])))
+            print('prior cluster [%s] has %s records (%s)' % (priorClusterID, priorRecordCnt, ','.join(sorted(priorRecordIDs)[:10])))
 
         # --lookup those records in side1 and see how many clusters they created (ideally one)
         auditRows = []
         missingCnt = 0
-        side1recordCnt = 0
-        side1clusterIDs = {}
-        for recordID in side2recordIDs:
+        newerRecordCnt = 0
+        newerClusterIDs = {}
+        for recordID in priorRecordIDs:
             auditData = {}
-            auditData['_side2clusterID_'] = side2clusterID
+            auditData['_priorClusterID_'] = priorClusterID
             auditData['_recordID_'] = recordID
-            auditData['_side2score_'] = fileMap2['clusters'][side2clusterID][recordID]
+            auditData['_priorScore_'] = priorMap['clusters'][priorClusterID][recordID]
             try:
-                side1clusterID = fileMap1['records'][recordID]
+                newerClusterID = newerMap['records'][recordID]
             except:
                 missingCnt += 1
                 auditData['_auditStatus_'] = 'missing'
-                auditData['_side1clusterID_'] = 'unknown'
-                auditData['_side1score_'] = ''
+                auditData['_newerClusterID_'] = 'unknown'
+                auditData['_newerScore_'] = ''
                 if debugOn:
                     print('newer run missing record [%s]' % recordID)
             else:
-                side1recordCnt += 1
+                newerRecordCnt += 1
                 auditData['_auditStatus_'] = 'same'  # --default, may get updated later
-                auditData['_side1clusterID_'] = fileMap1['records'][recordID]
-                auditData['_side1score_'] = fileMap1['clusters'][auditData['_side1clusterID_']][recordID]
+                auditData['_newerClusterID_'] = newerMap['records'][recordID]
+                auditData['_newerScore_'] = newerMap['clusters'][auditData['_newerClusterID_']][recordID]
 
-                if fileMap1['records'][recordID] in side1clusterIDs:
-                    side1clusterIDs[fileMap1['records'][recordID]] += 1
+                if newerMap['records'][recordID] in newerClusterIDs:
+                    newerClusterIDs[newerMap['records'][recordID]] += 1
                 else:
-                    side1clusterIDs[fileMap1['records'][recordID]] = 1
+                    newerClusterIDs[newerMap['records'][recordID]] = 1
             auditRows.append(auditData)
-        side1clusterCnt = len(side1clusterIDs)
+        newerClusterCnt = len(newerClusterIDs)
         statpack['MISSING_RECORD_COUNT'] += missingCnt
 
         if debugOn:
-            print('newer run has those %s records in %s clusters [%s]' % (side1recordCnt, side1clusterCnt, ','.join(map(str, side1clusterIDs.keys()))))
+            print('newer run has those %s records in %s clusters [%s]' % (newerRecordCnt, newerClusterCnt, ','.join(map(str, newerClusterIDs.keys()))))
 
         # --count as prior positive and see if any new negatives
+        largestnewerClusterID = list(newerClusterIDs.keys())[0]
         newNegativeCnt = 0
-        if side2recordCnt > 1:
+        if priorRecordCnt > 1:
             statpack['CLUSTERS']['PRIOR_COUNT'] += 1
-            statpack['PAIRS']['PRIOR_COUNT'] += ((side2recordCnt * (side2recordCnt - 1)) / 2)
-            statpack['RECORDS']['PRIOR_POSITIVE'] += side2recordCnt
-            if len(side1clusterIDs) > 1:  # --gonna be some new negatives here
+            statpack['PAIRS']['PRIOR_COUNT'] += ((priorRecordCnt * (priorRecordCnt - 1)) / 2)
+            statpack['RECORDS']['PRIOR_POSITIVE'] += priorRecordCnt
+            if len(newerClusterIDs) > 1:  # --gonna be some new negatives here
 
-                # --give credit for largest side1cluster
-                largestSide1clusterID = None
-                for clusterID in side1clusterIDs:
-                    if (not largestSide1clusterID) or side1clusterIDs[clusterID] > side1clusterIDs[largestSide1clusterID]:
-                        largestSide1clusterID = clusterID
-                statpack['PAIRS']['COMMON_COUNT'] += ((side1clusterIDs[largestSide1clusterID] * (side1clusterIDs[largestSide1clusterID] - 1)) / 2)
+                # --give credit for largest newerCluster
+                for clusterID in newerClusterIDs:
+                    if newerClusterIDs[clusterID] > newerClusterIDs[largestnewerClusterID]:
+                        largestnewerClusterID = clusterID
+                statpack['PAIRS']['COMMON_COUNT'] += ((newerClusterIDs[largestnewerClusterID] * (newerClusterIDs[largestnewerClusterID] - 1)) / 2)
 
                 # --mark the smaller clusters as new negatives
                 for i in range(len(auditRows)):
-                    if auditRows[i]['_side1clusterID_'] != largestSide1clusterID:
+                    if auditRows[i]['_newerClusterID_'] != largestnewerClusterID:
                         newNegativeCnt += 1
                         auditRows[i]['_auditStatus_'] = 'new negative'
             else:
-                statpack['PAIRS']['COMMON_COUNT'] += ((side2recordCnt * (side2recordCnt - 1)) / 2)
+                statpack['PAIRS']['COMMON_COUNT'] += ((priorRecordCnt * (priorRecordCnt - 1)) / 2)
 
-        # --now check for new positives
+        # --now check for new positives in the largest common cluster
         newPositiveCnt = 0
-        for side1clusterID in side1clusterIDs:
-            clusterNewPositiveCnt = 0
-            for recordID in fileMap1['clusters'][side1clusterID]:
-                if recordID not in side2recordIDs:
-                    newPositiveCnt += 1
-                    clusterNewPositiveCnt += 1
-                    side1recordCnt += 1
-                    auditData = {}
-                    auditData['_recordID_'] = recordID
-                    auditData['_side1clusterID_'] = side1clusterID
-                    auditData['_side1score_'] = fileMap1['clusters'][auditData['_side1clusterID_']][recordID]
+        newerClusterID = largestnewerClusterID
+        clusterNewPositiveCnt = 0
+        for recordID in newerMap['clusters'][newerClusterID]:
+            if recordID not in priorRecordIDs:
+                newPositiveCnt += 1
+                clusterNewPositiveCnt += 1
+                newerRecordCnt += 1
+                auditData = {}
+                auditData['_recordID_'] = recordID
+                auditData['_newerClusterID_'] = newerClusterID
+                auditData['_newerScore_'] = newerMap['clusters'][auditData['_newerClusterID_']][recordID]
 
-                    # --must lookup the side2 clusterID
-                    try:
-                        side2clusterID2 = fileMap2['records'][recordID]
-                    except:
-                        missingCnt += 1
-                        auditData['_auditStatus_'] = 'missing'
-                        auditData['_side2clusterID_'] = 'unknown'
-                        if debugOn:
-                            print('side 2 missing record [%s]' % recordID)
-                    else:
-                        auditData['_auditStatus_'] = 'new positive'
-                        auditData['_side2clusterID_'] = side2clusterID2
-                        auditData['_side2score_'] = fileMap2['clusters'][auditData['_side2clusterID_']][recordID]
-                    auditRows.append(auditData)
+                # --must lookup the side2 clusterID
+                try:
+                    priorClusterID2 = priorMap['records'][recordID]
+                except:
+                    missingCnt += 1
+                    auditData['_auditStatus_'] = 'missing'
+                    auditData['_priorClusterID_'] = 'unknown'
+                    if debugOn:
+                        print('side 2 missing record [%s]' % recordID)
+                else:
+                    auditData['_auditStatus_'] = 'new positive'
+                    auditData['_priorClusterID_'] = priorClusterID2
+                    auditData['_priorScore_'] = priorMap['clusters'][auditData['_priorClusterID_']][recordID]
+                auditRows.append(auditData)
 
             if clusterNewPositiveCnt > 0:
                 if debugOn:
-                    print('newer cluster %s has %s more records!' % (side1clusterID, clusterNewPositiveCnt))
+                    print('newer cluster %s has %s more records!' % (newerClusterID, clusterNewPositiveCnt))
 
         # --if exactly same, note and goto top
-        if side1clusterCnt == 1 and side1recordCnt == side2recordCnt:
+        if newerClusterCnt == 1 and newerRecordCnt == priorRecordCnt:
             if debugOn:
                 print('RESULT IS SAME!')
             statpack['ENTITY']['COMMON_COUNT'] += 1
-            if side1recordCnt > 1:
+            if newerRecordCnt > 1:
                 statpack['CLUSTERS']['COMMON_COUNT'] += 1
-                statpack['RECORDS']['SAME_POSITIVE'] += side1recordCnt
+                statpack['RECORDS']['SAME_POSITIVE'] += newerRecordCnt
             continue
 
         # --log it to the proper categories
         auditCategory = ''
         if missingCnt:
             auditCategory += '+MISSING'
-        if side1clusterCnt > 1:
+        if newerClusterCnt > 1:
             auditCategory += '+SPLIT'
-        if side1recordCnt > side2recordCnt:
+        if newerRecordCnt > priorRecordCnt:
             auditCategory += '+MERGE'
         if not auditCategory:
             auditCategory = '+UNKNOWN'
@@ -374,18 +356,18 @@ def erCompare(fileName1, fileName2, outputRoot):
         largerClusterID = None
         lowerClusterID = None
         if 'MERGE' in auditCategory:
-            side2clusterCounts = {}
+            priorClusterCounts = {}
             for auditData in auditRows:
-                if auditData['_side2clusterID_'] not in side2clusterCounts:
-                    side2clusterCounts[auditData['_side2clusterID_']] = 1
+                if auditData['_priorClusterID_'] not in priorClusterCounts:
+                    priorClusterCounts[auditData['_priorClusterID_']] = 1
                 else:
-                    side2clusterCounts[auditData['_side2clusterID_']] += 1
+                    priorClusterCounts[auditData['_priorClusterID_']] += 1
 
-            for clusterID in side2clusterCounts:
-                if side2clusterCounts[clusterID] > side2clusterCounts[side2clusterID]:
+            for clusterID in priorClusterCounts:
+                if priorClusterCounts[clusterID] > priorClusterCounts[priorClusterID]:
                     largerClusterID = clusterID
                     break
-                if side2clusterCounts[clusterID] == side2clusterCounts[side2clusterID] and clusterID < side2clusterID:
+                if priorClusterCounts[clusterID] == priorClusterCounts[priorClusterID] and clusterID < priorClusterID:
                     lowerClusterID = clusterID
 
             if debugOn:
@@ -403,53 +385,49 @@ def erCompare(fileName1, fileName2, outputRoot):
         if debugOn:
             print('AUDIT RESULT WILL BE COUNTED!')
 
-        # --compute the slice algorithm's cost
-        if newNegativeCnt > 0:
-            statpack['SLICE']['COST'] += splitCost(side1recordCnt, newNegativeCnt)
-
-        if newPositiveCnt > 0:
-            statpack['SLICE']['COST'] += splitCost(side1recordCnt, newPositiveCnt)
-
         # --initialize audit category
         if auditCategory not in statpack['AUDIT']:
             statpack['AUDIT'][auditCategory] = {}
             statpack['AUDIT'][auditCategory]['COUNT'] = 0
             statpack['AUDIT'][auditCategory]['SUB_CATEGORY'] = {}
 
-        # --adjust the side1Score (match key for senzing)
+        # --adjust the newerScore (match key for senzing)
         clarifyScores = True
         if clarifyScores:
 
-            # --get the same entity details
-            same_side1clusterID = 0
-            same_side1matchKeys = []  # --could be more than one
+            same_newerClusterID = 0
+            newerMatchKeys = {}
             for i in range(len(auditRows)):
                 if auditRows[i]['_auditStatus_'] == 'same':
-                    same_side1clusterID = auditRows[i]['_side1clusterID_']
-                    if auditRows[i]['_side1score_'] and auditRows[i]['_side1score_'] not in same_side1matchKeys:
-                        same_side1matchKeys.append(auditRows[i]['_side1score_'])
+                    same_newerClusterID = auditRows[i]['_newerClusterID_']
+                if auditRows[i]['_newerScore_']:
+                    if auditRows[i]['_newerClusterID_'] not in newerMatchKeys:
+                        newerMatchKeys[auditRows[i]['_newerClusterID_']] = {auditRows[i]['_newerScore_']: True}
+                    else:
+                        newerMatchKeys[auditRows[i]['_newerClusterID_']][auditRows[i]['_newerScore_']] = True
 
             # --adjust the new positives/negatives
             for i in range(len(auditRows)):
                 # --clear the scores on the records that are the same
                 if auditRows[i]['_auditStatus_'] == 'same':
-                    auditRows[i]['_side2score_'] = ''
-                    auditRows[i]['_side1score_'] = ''
-                # --see if split rows are related
+                    auditRows[i]['_priorScore_'] = ''
+                    auditRows[i]['_newerScore_'] = ''
+                # --use the relationship to see how split rows are related
                 elif auditRows[i]['_auditStatus_'] == 'new negative':
-                    ent1str = same_side1clusterID
-                    ent2str = auditRows[i]['_side1clusterID_']
+                    ent1str = same_newerClusterID
+                    ent2str = auditRows[i]['_newerClusterID_']
                     relKey = ent1str + '-' + ent2str if ent1str < ent2str else ent2str + '-' + ent1str
-                    if relKey in fileMap1['relationships']:
-                        auditRows[i]['_side1score_'] = 'related on: ' + fileMap1['relationships'][relKey]
-                    # else:
-                    #    auditRows[i]['_side1score_'] = 'no relation'
+                    if relKey in newerMap['relationships']:
+                        auditRows[i]['_newerScore_'] = 'related on: ' + newerMap['relationships'][relKey]
+                    else:
+                        auditRows[i]['_newerScore_'] = 'not related'
+                # -- use the record level match_key
                 elif auditRows[i]['_auditStatus_'] == 'new positive':
-                    if not auditRows[i]['_side1score_']:  # --maybe statisize this
-                        if len(same_side1matchKeys) == 1:
-                            auditRows[i]['_side1score_'] = same_side1matchKeys[0]
-                        # else:
-                        #    auditRows[i]['_side1score_'] = 'not_logged'
+                    #if not auditRows[i]['_newerScore_']:  # --maybe statisize this
+                    if len(newerMatchKeys[auditRows[i]['_newerClusterID_']]) == 1:
+                        auditRows[i]['_newerScore_'] = list(newerMatchKeys[auditRows[i]['_newerClusterID_']].keys())[0]
+                    else:
+                        auditRows[i]['_newerScore_'] = 'multiple'
 
         # --write the record
         scoreCounts = {}
@@ -466,21 +444,21 @@ def erCompare(fileName1, fileName2, outputRoot):
             auditData['_recordID_'] = recordIDsplit[0]
             csvRow.append(auditData['_dataSource_'])
             csvRow.append(auditData['_recordID_'])
-            csvRow.append(auditData['_side2clusterID_'])
-            csvRow.append(auditData['_side2score_'] if '_side2score_' in auditData else '')
-            csvRow.append(auditData['_side1clusterID_'])
-            csvRow.append(auditData['_side1score_'] if '_side1score_' in auditData else '')
+            csvRow.append(auditData['_priorClusterID_'])
+            csvRow.append(auditData['_priorScore_'] if '_priorScore_' in auditData else '')
+            csvRow.append(auditData['_newerClusterID_'])
+            csvRow.append(auditData['_newerScore_'] if '_newerScore_' in auditData else '')
             if auditData['_auditStatus_'] == 'new negative':
                 statpack['RECORDS']['NEW_NEGATIVE'] += 1
             elif auditData['_auditStatus_'] == 'new positive':
                 statpack['RECORDS']['NEW_POSITIVE'] += 1
             elif auditData['_auditStatus_'] == 'same':
                 statpack['RECORDS']['SAME_POSITIVE'] += 1
-            if auditData['_auditStatus_'] in ('new negative', 'new positive') and auditData['_side1score_']:
-                if auditData['_side1score_'] not in scoreCounts:
-                    scoreCounts[auditData['_side1score_']] = 1
+            if auditData['_auditStatus_'] in ('new negative', 'new positive') and auditData['_newerScore_']:
+                if auditData['_newerScore_'] not in scoreCounts:
+                    scoreCounts[auditData['_newerScore_']] = 1
                 else:
-                    scoreCounts[auditData['_side1score_']] += 1
+                    scoreCounts[auditData['_newerScore_']] += 1
             if debugOn:
                 print(auditData)
             sampleRows.append(dict(zip(csvHeaders, csvRow)))
@@ -491,7 +469,6 @@ def erCompare(fileName1, fileName2, outputRoot):
                 print(err)
                 print('could not write to output file %s' % outputCsvFile)
                 return 1
-            # print(','.join(map(str, csvRow)))
 
         # --assign the best score (most used)
         use_best = False
@@ -518,10 +495,10 @@ def erCompare(fileName1, fileName2, outputRoot):
         statpack['AUDIT'][auditCategory]['SUB_CATEGORY'][bestScore]['COUNT'] += 1
 
         # --place in the sample list
-        if len(statpack['AUDIT'][auditCategory]['SUB_CATEGORY'][bestScore]['SAMPLE']) < 100:
+        if len(statpack['AUDIT'][auditCategory]['SUB_CATEGORY'][bestScore]['SAMPLE']) < 500:
             statpack['AUDIT'][auditCategory]['SUB_CATEGORY'][bestScore]['SAMPLE'].append(sampleRows)
         else:
-            randomSampleI = random.randint(1, 99)
+            randomSampleI = random.randint(1, 499)
             if randomSampleI % 10 != 0:
                 statpack['AUDIT'][auditCategory]['SUB_CATEGORY'][bestScore]['SAMPLE'][randomSampleI] = sampleRows
 
@@ -542,13 +519,13 @@ def erCompare(fileName1, fileName2, outputRoot):
     # --get all cluster counts for both sides
 
     # --get cluster and pair counts for side1
-    for side1clusterID in fileMap1['clusters']:
+    for newerClusterID in newerMap['clusters']:
         statpack['ENTITY']['NEWER_COUNT'] += 1
-        side1recordCnt = len(fileMap1['clusters'][side1clusterID])
-        if side1recordCnt == 1:
+        newerRecordCnt = len(newerMap['clusters'][newerClusterID])
+        if newerRecordCnt == 1:
             continue
         statpack['CLUSTERS']['NEWER_COUNT'] += 1
-        statpack['PAIRS']['NEWER_COUNT'] += ((side1recordCnt * (side1recordCnt - 1)) / 2)
+        statpack['PAIRS']['NEWER_COUNT'] += ((newerRecordCnt * (newerRecordCnt - 1)) / 2)
 
     # --entity precision and recall
     statpack['ENTITY']['PRECISION'] = 0
@@ -627,8 +604,6 @@ def erCompare(fileName1, fileName2, outputRoot):
     print ('%s split entities ' % (statpack['AUDIT']['SPLIT']['COUNT'] if 'SPLIT' in statpack['AUDIT'] else 0))
     print ('%s split+merge entities ' % (statpack['AUDIT']['SPLIT+MERGE']['COUNT'] if 'SPLIT+MERGE' in statpack['AUDIT'] else 0))
     print ('')
-    # print ('%s slice edit distance ' % statpack['SLICE']['COST'])
-    # print('')
     if statpack['MISSING_RECORD_COUNT']:
         print ('%s ** missing clusters **' % statpack['MISSING_RECORD_COUNT'])
         print('')
