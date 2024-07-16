@@ -42,20 +42,20 @@ def load_from_file(file_name, file_type):
         reader = csv.DictReader(f)
         cluster_field, source_field, record_field, score_field = detect_column_names(reader.fieldnames)
         progress_cntr = 0
-        for entity_group in groupby(reader, key=itemgetter(cluster_field)):
-            progress_cntr = progress_display(progress_cntr, 'entities loaded')
-            entity_id = entity_group[0]
-            file_map['entities'][entity_id] = {}
-            for record in entity_group[1]:
-                if record.get('RELATED_ENTITY_ID', '0') == '0':
-                    record_key = compute_record_key(record, cluster_field, source_field, record_field, score_field)
-                    file_map['entities'][entity_id][record_key] = record.get(score_field,'')
-                    file_map['records'][record_key] = entity_id
-                elif file_type == 'newer':
-                    rel_key = '|'.join(sorted([record['RESOLVED_ENTITY_ID'], record['RELATED_ENTITY_ID']]))
-                    if rel_key not in file_map['relations']:
-                        file_map['relations'][rel_key] = record.get(score_field,'')
-        progress_cntr = progress_display(progress_cntr, 'entities loaded, complete')
+        for record in reader:
+            progress_cntr = progress_display(progress_cntr, 'records loaded')
+            entity_id = record[cluster_field]
+            if entity_id not in file_map['entities']:
+                file_map['entities'][entity_id] = {}
+            if record.get('RELATED_ENTITY_ID', '0') == '0':
+                record_key = compute_record_key(record, cluster_field, source_field, record_field, score_field)
+                file_map['entities'][entity_id][record_key] = record.get(score_field,'')
+                file_map['records'][record_key] = entity_id
+            elif file_type == 'newer':
+                rel_key = '|'.join(sorted([record['RESOLVED_ENTITY_ID'], record['RELATED_ENTITY_ID']]))
+                if rel_key not in file_map['relations']:
+                    file_map['relations'][rel_key] = record.get(score_field,'')
+        progress_cntr = progress_display(progress_cntr, 'records loaded, complete')
     return file_map
 
 
@@ -102,26 +102,23 @@ def audit(file_name1, file_name2, output_root, debug):
         progress_cntr = progress_display(progress_cntr, 'newer entities audited')
         logging.debug('-' * 50)
         logging.debug(f"newer entity {newer_entity_id} has {len(newer_map['entities'][newer_entity_id])} records")
-        newer_entity_record_count = len(newer_map['entities'][newer_entity_id])
-        newer_pair_count += newer_entity_record_count * (newer_entity_record_count - 1) / 2
         prior_entity_ids = {}
-        valid_newer_keys = {}
+        newer_keys_found = {}
+        any_missing = False
         missing_cnt = 0
         for newer_key in newer_map['entities'][newer_entity_id]:
             prior_entity_id = prior_map['records'].get(newer_key, 0)
             if prior_entity_id != 0:
-                valid_newer_keys[newer_key] = prior_entity_id
+                newer_keys_found[newer_key] = prior_entity_id
                 prior_entity_ids = count_by_key(prior_entity_ids, prior_entity_id)
-                if prior_entity_id not in prior_entities:
-                    prior_entities[prior_entity_id] = True
-                    prior_entity_record_count = len(prior_map['entities'].get(prior_entity_id,[]))
-                    prior_pair_count += prior_entity_record_count * (prior_entity_record_count - 1) / 2
             else:
                 missing_cnt += 1
+        newer_pair_count += len(newer_keys_found) * (len(newer_keys_found) - 1) / 2
 
         if missing_cnt:
             logging.debug(f"prior set is missing {missing_cnt} records!")
             missing_prior_record_cnt += missing_cnt
+            any_missing = True
 
         prior_entity_id = 0
         for entity_id in prior_entity_ids: # choose the largest matching entity
@@ -131,33 +128,33 @@ def audit(file_name1, file_name2, output_root, debug):
             elif prior_entity_ids[entity_id] == prior_entity_ids.get(prior_entity_id, 0) and int(entity_id) < int(prior_entity_id):
                 prior_entity_id = entity_id
         if len(prior_entity_ids) > 1:
-            logging.debug(f"prior entity {prior_entity_id} selected as it has the most matching records or is the lowest entity_id !")
+            logging.debug(f"prior entity {prior_entity_id} selected as it has the most matching records or is the lowest entity_id!")
 
-        same_cnt = new_pos_cnt = missing_cnt = 0
+        same_cnt = new_pos_cnt = 0
         audit_records = []
-        for newer_key in valid_newer_keys:
+        for newer_key in newer_map['entities'][newer_entity_id]:
             data_source, record_id = parse_record_key(newer_key)
             audit_record = {'data_source': data_source,
                             'record_id': record_id,
                             'record_key': newer_key,
                             'newer_id': newer_entity_id,
                             'newer_score': newer_map['entities'][newer_entity_id][newer_key],
-                            'prior_id': valid_newer_keys[newer_key],
+                            'prior_id': newer_keys_found.get(newer_key, '0'),
                             'prior_score': ''
             }
             if audit_record['prior_id'] == prior_entity_id:
                 audit_record['audit_result'] = 'same'
                 audit_record['prior_score'] = prior_map['entities'][prior_entity_id][newer_key]
                 same_cnt += 1
-            elif audit_record['prior_id'] != 0:
+            elif audit_record['prior_id'] != '0':
                 audit_record['audit_result'] = 'new positive'
                 new_pos_cnt += 1
             else:
                 audit_record['audit_result'] = 'missing'
-                missing_cnt += 1
-                missing_prior_record_cnt += 1
             audit_records.append(audit_record)
 
+
+        missing_cnt = 0
         new_neg_cnt = 0
         newer_entity_ids = {}
         for prior_key in prior_map['entities'].get(prior_entity_id,[]):
@@ -166,7 +163,7 @@ def audit(file_name1, file_name2, output_root, debug):
                 audit_record = {'data_source': data_source,
                                 'record_id': record_id,
                                 'record_key': prior_key,
-                                'newer_id': newer_map['records'].get(prior_key,0),
+                                'newer_id': newer_map['records'].get(prior_key, '0'),
                                 'newer_score': '', # will be replaced by relationship match_key later
                                 'audit_result': 'new negative' if prior_map['records'].get(newer_key) else 'missing',
                                 'prior_id': prior_entity_id,
@@ -181,9 +178,16 @@ def audit(file_name1, file_name2, output_root, debug):
             newer_entity_id2 = newer_map['records'].get(prior_key, 0)
             if newer_entity_id2 != 0:
                 newer_entity_ids = count_by_key(newer_entity_ids, newer_entity_id2)
-            else:
-                missing_cnt += 1
-                missing_newer_record_cnt += 1
+
+        if prior_entity_id not in prior_entities:
+            prior_entities[prior_entity_id] = True
+            prior_entity_record_count = len(prior_map['entities'].get(prior_entity_id,[])) - missing_cnt
+            prior_pair_count += prior_entity_record_count * (prior_entity_record_count - 1) / 2
+
+        if missing_cnt:
+            logging.debug(f"newer set is missing {missing_cnt} records!")
+            missing_newer_record_cnt += missing_cnt
+            any_missing = True
 
         # always get credit for same pairs
         common_pair_count += same_cnt * (same_cnt - 1) / 2
@@ -213,7 +217,7 @@ def audit(file_name1, file_name2, output_root, debug):
 
         # log it to the proper categories
         audit_category = ''
-        if missing_cnt:
+        if any_missing:
             audit_category += '+MISSING'
         if new_neg_cnt:
             audit_category += '+SPLIT'
@@ -289,6 +293,8 @@ def audit(file_name1, file_name2, output_root, debug):
             if random_index % 10 != 0:
                 audit_stats[audit_category]['SUB_CATEGORY'][best_score]['SAMPLE'][random_index] = audit_sample
 
+        if debug:
+            input('press any key to continue')
     progress_cntr = progress_display(progress_cntr, 'newer entities audited, complete')
     csv_handle.close()
 
@@ -360,8 +366,9 @@ def stat_checker_file_loader(file_name):
     with open(file_name, 'r') as f:
         reader = csv.DictReader(f)
         cluster_field, source_field, record_field, score_field = detect_column_names(reader.fieldnames)
+        sorted_reader = sorted(reader, key=itemgetter(cluster_field)) # can't rely on inpu being sorted
         progress_cntr = 0
-        for entity_group in groupby(reader, key=itemgetter(cluster_field)):
+        for entity_group in groupby(sorted_reader, key=itemgetter(cluster_field)):
             progress_cntr = progress_display(progress_cntr, 'entities loaded')
             entity_count += 1
             entity_id = entity_group[0]
@@ -409,21 +416,23 @@ def stat_checker(newer_file_name, prior_file_name):
     recall = round(true_positive_count / (true_positive_count + false_negative_count), 5) if true_positive_count + false_negative_count > 0 else 0
     f1_score = round((2 * precision * recall) / (precision + recall),5) if precision + recall > 0 else 0
 
-    print()
-    print('newer_entities', newer_entity_count)
-    print('prior_entities', prior_entity_count)
-    print()
-    print('newer_pairs', len(newer_pairs))
-    print('prior_pairs', len(prior_pairs))
-    print()
-    print('true_positives', true_positive_count)
-    print('false_positives', false_positive_count)
-    print('false_negatives', false_negative_count)
-    print()
-    print('precision', precision)
-    print('recall', recall)
-    print('f1_score', f1_score)
-    print()
+    print(textwrap.dedent(f'''\
+
+    {newer_entity_count} newer_entities
+    {prior_entity_count} prior_entities
+
+    {len(newer_pairs)} newer_pairs
+    {len(prior_pairs)} prior_pairs
+
+    {true_positive_count} true_positives
+    {false_positive_count} false_positives
+    {false_negative_count} false_negatives
+
+    {precision} precision
+    {recall} recall
+    {f1_score} f1-score
+
+    '''))
     return 0
 
 
