@@ -193,7 +193,7 @@ def audit(file_name1, file_name2, output_root, debug):
         common_pair_count += same_cnt * (same_cnt - 1) / 2
 
         # skip entity reporting if same
-        if new_pos_cnt + new_neg_cnt == 0:
+        if new_pos_cnt + new_neg_cnt == 0 and not any_missing:
             common_entity_count += 1
             logging.debug("skipping as result is same!")
             continue
