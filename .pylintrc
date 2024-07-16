@@ -1,6 +1,8 @@
 [pylint]
 disable=
     bare-except,
+    broad-exception-caught,
+    broad-exception-raised,
     consider-iterating-dictionary,
     consider-using-dict-items,
     consider-using-enumerate,
@@ -11,6 +13,7 @@ disable=
     import-error,
     invalid-name,
     line-too-long,
+    logging-fstring-interpolation,
     missing-function-docstring,
     missing-module-docstring,
     multiple-statements,

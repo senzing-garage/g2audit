@@ -5,7 +5,6 @@ import sys
 import argparse
 import csv
 import json
-from datetime import datetime
 import time
 import random
 from itertools import groupby
@@ -30,7 +29,7 @@ def detect_column_names(field_names):
                 score_field = field_name
         if not cluster_field or not source_field or not record_field:
             raise Exception(f"Expected fields missing for {file_name}, need at least ENTITY_ID, DATA_SOURCE and RECORD_ID")
-    return cluster_field, source_field, record_field, score_field 
+    return cluster_field, source_field, record_field, score_field
 
 
 def load_from_file(file_name, file_type):
@@ -124,7 +123,7 @@ def audit(file_name1, file_name2, output_root, debug):
             logging.debug(f"prior set is missing {missing_cnt} records!")
             missing_prior_record_cnt += missing_cnt
 
-        prior_entity_id = 0 
+        prior_entity_id = 0
         for entity_id in prior_entity_ids: # choose the largest matching entity
             logging.debug(f"prior entity {entity_id} has {prior_entity_ids[entity_id]} of those records, plus {len(prior_map['entities'][entity_id])-prior_entity_ids[entity_id]} more")
             if prior_entity_ids[entity_id] > prior_entity_ids.get(prior_entity_id, 0):
@@ -290,9 +289,6 @@ def audit(file_name1, file_name2, output_root, debug):
             if random_index % 10 != 0:
                 audit_stats[audit_category]['SUB_CATEGORY'][best_score]['SAMPLE'][random_index] = audit_sample
 
-        if args.debug:
-            response = input('press any key to continue ...')
-
     progress_cntr = progress_display(progress_cntr, 'newer entities audited, complete')
     csv_handle.close()
 
@@ -388,7 +384,7 @@ def stat_checker(newer_file_name, prior_file_name):
         logging.error(f"{err} loading files")
         return 1
 
-    logging.info(f"checking newer pairs for true and false positives")
+    logging.info("checking newer pairs for true and false positives")
     true_positive_count = 0
     false_positive_count = 0
     progress_cntr = 0
@@ -401,7 +397,7 @@ def stat_checker(newer_file_name, prior_file_name):
     progress_cntr = progress_display(progress_cntr, 'newer pairs checked, complete')
 
     progress_cntr = 0
-    logging.info(f"checking prior pairs for false negatives")
+    logging.info("checking prior pairs for false negatives")
     false_negative_count = 0
     for prior_pair in prior_pairs:
         progress_cntr = progress_display(progress_cntr, 'prior pairs checked')
@@ -465,7 +461,7 @@ def progress_display(progress_cntr, desc):
 
 
 if __name__ == '__main__':
- 
+
     argParser = argparse.ArgumentParser()
     argParser.add_argument('-n', '--newer_csv_file', dest='newerFile', default=None, help='the latest entity map file')
     argParser.add_argument('-p', '--prior_csv_file', dest='priorFile', default=None, help='the prior entity map file')
@@ -495,9 +491,11 @@ if __name__ == '__main__':
         logging.error('An output root must be specified with -o')
         sys.exit(1)
 
-    procStartTime = time.time()
+    proc_start_time = time.time()
     if args.checker:
         success = stat_checker(args.newerFile, args.priorFile)
     else:
         success = audit(args.newerFile, args.priorFile, args.outputRoot, args.debug)
+    print(f"process completed in {round((time.time() - proc_start_time) / 60, 1)} minutes\n")
+
     sys.exit(success)
