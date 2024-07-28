@@ -35,23 +35,23 @@ def detect_column_names(field_names):
 def load_from_file(file_name, file_type):
     logging.info(f"loading {file_name} ...")
     file_map = {'entities': {},
-                 'records': {},
-                 'relations': {}
+                'records': {},
+                'relations': {}
     }
     with open(file_name, 'r') as f:
         reader = csv.DictReader(f)
         cluster_field, source_field, record_field, score_field = detect_column_names(reader.fieldnames)
         progress_cntr = 0
         for record in reader:
-            progress_cntr = progress_display(progress_cntr, 'records loaded')
-            entity_id = record[cluster_field]
+            progress_cntr = progress_display(progress_cntr, f"{file_type} records loaded", interval=100000)
+            entity_id = str(record[cluster_field])
             if entity_id not in file_map['entities']:
                 file_map['entities'][entity_id] = {}
             if record.get('RELATED_ENTITY_ID', '0') == '0':
                 record_key = compute_record_key(record, cluster_field, source_field, record_field, score_field)
                 file_map['entities'][entity_id][record_key] = record.get(score_field,'')
                 file_map['records'][record_key] = entity_id
-            elif file_type == 'newer':
+            elif file_type == 'newer': # don't need relationships for prior
                 rel_key = '|'.join(sorted([record['RESOLVED_ENTITY_ID'], record['RELATED_ENTITY_ID']]))
                 if rel_key not in file_map['relations']:
                     file_map['relations'][rel_key] = record.get(score_field,'')
@@ -107,8 +107,8 @@ def audit(file_name1, file_name2, output_root, debug):
         any_missing = False
         missing_cnt = 0
         for newer_key in newer_map['entities'][newer_entity_id]:
-            prior_entity_id = prior_map['records'].get(newer_key, 0)
-            if prior_entity_id != 0:
+            prior_entity_id = prior_map['records'].get(newer_key, 'unknown')
+            if prior_entity_id != 'unknown':
                 newer_keys_found[newer_key] = prior_entity_id
                 prior_entity_ids = count_by_key(prior_entity_ids, prior_entity_id)
             else:
@@ -119,13 +119,16 @@ def audit(file_name1, file_name2, output_root, debug):
             logging.debug(f"prior set is missing {missing_cnt} records!")
             missing_prior_record_cnt += missing_cnt
             any_missing = True
+            if len(newer_keys_found) == 0:
+                logging.debug(f"skipping as prior set does not have any of the newer records!")
+                continue
 
-        prior_entity_id = 0
+        prior_entity_id = 'unknown'
         for entity_id in prior_entity_ids: # choose the largest matching entity
             logging.debug(f"prior entity {entity_id} has {prior_entity_ids[entity_id]} of those records, plus {len(prior_map['entities'][entity_id])-prior_entity_ids[entity_id]} more")
             if prior_entity_ids[entity_id] > prior_entity_ids.get(prior_entity_id, 0):
                 prior_entity_id = entity_id
-            elif prior_entity_ids[entity_id] == prior_entity_ids.get(prior_entity_id, 0) and int(entity_id) < int(prior_entity_id):
+            elif prior_entity_ids[entity_id] == prior_entity_ids.get(prior_entity_id, 0) and entity_id < prior_entity_id:
                 prior_entity_id = entity_id
         if len(prior_entity_ids) > 1:
             logging.debug(f"prior entity {prior_entity_id} selected as it has the most matching records or is the lowest entity_id!")
@@ -139,14 +142,14 @@ def audit(file_name1, file_name2, output_root, debug):
                             'record_key': newer_key,
                             'newer_id': newer_entity_id,
                             'newer_score': newer_map['entities'][newer_entity_id][newer_key],
-                            'prior_id': newer_keys_found.get(newer_key, '0'),
+                            'prior_id': newer_keys_found.get(newer_key, 'unknown'),
                             'prior_score': ''
             }
             if audit_record['prior_id'] == prior_entity_id:
                 audit_record['audit_result'] = 'same'
                 audit_record['prior_score'] = prior_map['entities'][prior_entity_id][newer_key]
                 same_cnt += 1
-            elif audit_record['prior_id'] != '0':
+            elif audit_record['prior_id'] != 'unknown':
                 audit_record['audit_result'] = 'new positive'
                 new_pos_cnt += 1
             else:
@@ -158,14 +161,15 @@ def audit(file_name1, file_name2, output_root, debug):
         new_neg_cnt = 0
         newer_entity_ids = {}
         for prior_key in prior_map['entities'].get(prior_entity_id,[]):
+            newer_entity_id2 = newer_map['records'].get(prior_key, 'unknown')
             if prior_key not in newer_map['entities'][newer_entity_id]:
                 data_source, record_id = parse_record_key(prior_key)
                 audit_record = {'data_source': data_source,
                                 'record_id': record_id,
                                 'record_key': prior_key,
-                                'newer_id': newer_map['records'].get(prior_key, '0'),
+                                'newer_id': newer_entity_id2,
                                 'newer_score': '', # will be replaced by relationship match_key later
-                                'audit_result': 'new negative' if prior_map['records'].get(newer_key) else 'missing',
+                                'audit_result': 'new negative' if newer_entity_id2 != 'unknown' else 'missing',
                                 'prior_id': prior_entity_id,
                                 'prior_score': prior_map['entities'][prior_entity_id][prior_key]
                 }
@@ -175,8 +179,7 @@ def audit(file_name1, file_name2, output_root, debug):
                     missing_cnt += 1
                 audit_records.append(audit_record)
 
-            newer_entity_id2 = newer_map['records'].get(prior_key, 0)
-            if newer_entity_id2 != 0:
+            if newer_entity_id2 != 'unknown':
                 newer_entity_ids = count_by_key(newer_entity_ids, newer_entity_id2)
 
         if prior_entity_id not in prior_entities:
@@ -205,7 +208,7 @@ def audit(file_name1, file_name2, output_root, debug):
                 if newer_entity_ids[newer_entity_id2] > newer_entity_ids[best_newer_entity_id]:
                     best_newer_entity_id = newer_entity_id2
                     logging.debug(f"oops, newer entity id {best_newer_entity_id} has {newer_entity_ids[best_newer_entity_id]} matching records for prior_entity {prior_entity_id}")
-                elif newer_entity_ids[newer_entity_id2] == newer_entity_ids[best_newer_entity_id] and int(newer_entity_id2) < int(newer_entity_id):
+                elif newer_entity_ids[newer_entity_id2] == newer_entity_ids[best_newer_entity_id] and newer_entity_id2 < newer_entity_id:
                     best_newer_entity_id = newer_entity_id2
                     logging.debug(f"oops, newer entity id {best_newer_entity_id} has the same number of matching records for prior_entity {prior_entity_id} and is a lower ID!")
                     break
@@ -293,8 +296,8 @@ def audit(file_name1, file_name2, output_root, debug):
             if random_index % 10 != 0:
                 audit_stats[audit_category]['SUB_CATEGORY'][best_score]['SAMPLE'][random_index] = audit_sample
 
-        if debug:
-            input('press any key to continue')
+        #if debug:
+        #    input('press any key to continue')
     progress_cntr = progress_display(progress_cntr, 'newer entities audited, complete')
     csv_handle.close()
 
@@ -461,11 +464,12 @@ def parse_record_key(key):
     return key.split('||')
 
 
-def progress_display(progress_cntr, desc):
+def progress_display(progress_cntr, desc, **kwargs):
+    interval = kwargs.get('interval', 100000)
     if 'complete' not in desc:
         progress_cntr += 1
-    if progress_cntr % 10000 == 0 or 'complete' in desc:
-        logging.info(f"{progress_cntr} {desc}")
+    if progress_cntr % interval == 0 or 'complete' in desc:
+        logging.info(f"{progress_cntr:,} {desc}")
     return progress_cntr
 
 
