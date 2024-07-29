@@ -120,7 +120,7 @@ def audit(file_name1, file_name2, output_root, debug):
             missing_prior_record_cnt += missing_cnt
             any_missing = True
             if len(newer_keys_found) == 0:
-                logging.debug(f"skipping as prior set does not have any of the newer records!")
+                logging.debug("skipping as prior set does not have any of the newer records!")
                 continue
 
         prior_entity_id = 'unknown'
