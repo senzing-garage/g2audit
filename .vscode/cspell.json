@@ -2,27 +2,26 @@
   "version": "0.2",
   "language": "en",
   "words": [
+    "analysing",
     "CCLA",
+    "cntr",
     "CODEOWNER",
+    "cooldown",
+    "esbenp",
+    "fstring",
     "ICLA",
+    "kernelsam",
+    "levelname",
+    "mypy",
     "NEWERFILE",
     "OUTPUTROOT",
     "PRIORFILE",
-    "Senzing",
-    "analysing",
-    "cntr",
-    "esbenp",
-    "fstring",
-    "levelname",
-    "mypy",
     "pydev",
     "pylint",
+    "Senzing",
     "shellcheck",
     "stackoverflow",
     "truthset"
   ],
-  "ignorePaths": [
-    ".git/**",
-    ".mypy_cache/**"
-  ]
+  "ignorePaths": [".git/**", ".mypy_cache/**"]
 }
